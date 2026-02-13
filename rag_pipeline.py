@@ -128,13 +128,3 @@ class RAGPipeline:
         answer = self.chain.invoke(question)
         return answer
  
-if __name__ == "__main__":
-    video_id="Gfr50f6ZBvo"
-    bot = RAGPipeline(video_id)
-    question1 = "What is the main topic of the video?"
-    answer1 = bot.run(question1)
-    print(f"Answer: {answer1}")
-    question2 = "What are the key points discussed?"
-    answer2 = bot.run(question2)
-    # print_memory_usage("Before LLM Call")
-    print(f"Answer: {answer2}")
