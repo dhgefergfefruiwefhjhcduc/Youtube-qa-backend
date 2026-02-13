@@ -7,6 +7,10 @@ CORS(app)
 
 pipelines = {}
 
+@app.route("/")
+def health():
+    return "Server is running", 200
+
 @app.route("/ask", methods=["POST"])
 def ask():
     data = request.json
