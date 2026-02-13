@@ -1,36 +1,49 @@
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled
+from youtube_transcript_api import YouTubeTranscriptApi
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
-from langchain_huggingface import HuggingFaceEmbeddings,ChatHuggingFace,HuggingFaceEndpoint
-from langchain_classic.memory import ConversationBufferMemory
-from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_huggingface import HuggingFaceEndpointEmbeddings ,ChatHuggingFace,HuggingFaceEndpoint
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 import os 
+# import psutil
+
 from dotenv import load_dotenv
+
+# def print_memory_usage(stage=""):
+#     process = psutil.Process(os.getpid())
+#     mem = process.memory_info().rss / (1024 ** 2)
+#     print(f"[{stage}] RAM Usage: {mem:.2f} MB")
+
 load_dotenv()
 hf_token=os.getenv("HUGGINGFACEHUB_API_TOKEN")
+# print_memory_usage("Start")
+embeddings = HuggingFaceEndpointEmbeddings(
+    huggingfacehub_api_token=hf_token,
+    model="sentence-transformers/all-MiniLM-L6-v2"
+)
+# print_memory_usage("After Embeddings Load")
 
 class RAGPipeline:
     def __init__(self,video_id):
         self.video_id=video_id
         self.parser=StrOutputParser()
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-        self.embeddings = self.getting_embeddings()
+        # self.memory = ConversationBufferMemory(
+        #     memory_key="chat_history",
+        #     return_messages=True
+        # )
 
         if not os.path.exists("vectorstore"):
             print("Creating vectorstore...")
             transcript = self.get_transcript()
+            transcript = transcript[:40000]
             docs = self.text_split(transcript)
-            self.store_embeddings(docs, self.embeddings)
+            self.store_embeddings(docs)
         self.chain=self.form_chain(self.setting_retriever())
-    
-    def get_session_history(self, session_id):
-        return self.memory.chat_memory
+        # print_memory_usage("After Vectorstore Creation")
+
+    # def get_session_history(self, session_id):
+    #     return self.memory.chat_memory
 
     def get_transcript(self):
         print(f"Fetching transcript for video ID: {self.video_id}")
@@ -40,20 +53,16 @@ class RAGPipeline:
 
     def text_split(self,text):
         print("Splitting transcript into chunks...")
-        splitter=RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        splitter=RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=150)
         print(f"Transcript split into {len(splitter.create_documents([text]))} chunks.")
         return splitter.create_documents([text])
 
-    def getting_embeddings(self):
-        return HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
-
-    def store_embeddings(self,docs, embeddings):
+    def store_embeddings(self,docs):
         vectorstore=FAISS.from_documents(docs, embeddings)
         vectorstore.save_local("vectorstore")
 
     def load_embeddings(self):
         print("Loading vectorstore...")
-        embeddings=self.getting_embeddings()
         print("Vectorstore loaded.")
         return FAISS.load_local("vectorstore", embeddings)
 
@@ -61,12 +70,12 @@ class RAGPipeline:
         print("Setting up retriever...")
         vectorstore = FAISS.load_local(
             "vectorstore",
-            self.embeddings,
+            embeddings,
             allow_dangerous_deserialization=True
         )
         retriever = vectorstore.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": 5, "lambda_mult": 0.7}
+            search_kwargs={"k": 3, "lambda_mult": 0.7}
         )
         print("Retriever set up.")
         return retriever
@@ -103,21 +112,29 @@ class RAGPipeline:
         """,
             input_variables = ['context', 'question']
         )
-        llm=HuggingFaceEndpoint(repo_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",task="conversational", max_new_tokens=1024,temperature=0.5)
+        llm=HuggingFaceEndpoint(repo_id="mistralai/Mistral-7B-Instruct-v0.2",task="conversational", max_new_tokens=512,temperature=0.5)
         chat_model = ChatHuggingFace(llm=llm,)
         parallel_chain = RunnableParallel({
-            'context': RunnableLambda(lambda x: x["question"]) |retriever | RunnableLambda(self.format_docs),
+            'context': retriever | RunnableLambda(self.format_docs),
             'question': RunnablePassthrough()
         })
         main_chain = parallel_chain | prompt | chat_model | self.parser
-        chain_with_memory = RunnableWithMessageHistory( main_chain, self.get_session_history, input_messages_key="question", history_messages_key="history")
+        # chain_with_memory = RunnableWithMessageHistory( main_chain, self.get_session_history, input_messages_key="question", history_messages_key="history")
         print("RAG chain formed.")
-        return chain_with_memory
+        return main_chain
     
     def run(self, question):
         print(f"Running RAG pipeline for question: {question}")
-        answer = self.chain.invoke(
-            {"question": question},
-            config={"configurable": {"session_id": "default"}}
-        )
+        answer = self.chain.invoke(question)
         return answer
+ 
+if __name__ == "__main__":
+    video_id="Gfr50f6ZBvo"
+    bot = RAGPipeline(video_id)
+    question1 = "What is the main topic of the video?"
+    answer1 = bot.run(question1)
+    print(f"Answer: {answer1}")
+    question2 = "What are the key points discussed?"
+    answer2 = bot.run(question2)
+    # print_memory_usage("Before LLM Call")
+    print(f"Answer: {answer2}")
