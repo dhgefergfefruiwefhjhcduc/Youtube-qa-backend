@@ -25,12 +25,13 @@ class RAGPipeline:
             memory_key="chat_history",
             return_messages=True
         )
-
-        if not os.path.exists("vectorstore"):
-            print("Creating vectorstore...")
+        os.makedirs("vector_store", exist_ok=True)
+        if not os.path.exists(f"vector_store/{video_id}"):
+            print("Creating vector store...")
             transcript = self.get_transcript()
+            transcript=transcript[:100000]
             docs = self.text_split(transcript)
-            self.store_embeddings(docs)
+            self.store_embeddings(docs,video_id)
         self.chain=self.form_chain(self.setting_retriever())
 
     def get_session_history(self, session_id):
@@ -48,13 +49,13 @@ class RAGPipeline:
         print(f"Transcript split into {len(splitter.create_documents([text]))} chunks.")
         return splitter.create_documents([text])
 
-    def store_embeddings(self,docs):
+    def store_embeddings(self,docs,video_id):
         vectorstore=FAISS.from_documents(docs, embeddings)
-        vectorstore.save_local("vectorstore")
+        vectorstore.save_local(f"vector_store/{video_id}")
 
     def load_embeddings(self):
         print("Loading vector store...")
-        return FAISS.load_local("vectorstore", embeddings,allow_dangerous_deserialization=True)
+        return FAISS.load_local(f"vector_store/{self.video_id}", embeddings,allow_dangerous_deserialization=True)
 
     def setting_retriever(self):
         print("Setting up retriever...")
@@ -96,6 +97,9 @@ class RAGPipeline:
 
         Question: {question}
 
+        dont provide two answers for same question, if you are not sure about the answer, provide the most relevant answer with the timestamp.
+        only provide a single answer.
+
         """,
             input_variables = ['context', 'question']
         )
@@ -120,7 +124,8 @@ class RAGPipeline:
         return answer
  
 if __name__ == "__main__":
-    video_id = input("Enter YouTube video ID: ") 
+    video_url = input("Enter YouTube video URL: ") 
+    video_id = video_url.split("v=")[-1].split("&")[0]
     pipeline = RAGPipeline(video_id)
     while True:
         print("\n-----------------------------------")
