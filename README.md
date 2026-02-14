@@ -1,30 +1,31 @@
 **YouTube QA Bot — Backend (RAG Pipeline)**
 
-This repository contains the backend components for a Retrieval-Augmented Generation (RAG) based YouTube QA Bot. It provides a simple pipeline to index transcript embeddings into a FAISS vector store and run a retrieval + generation pipeline to answer user questions grounded in YouTube video content.
+This repository contains the backend for a Retrieval-Augmented Generation (RAG) YouTube QA Bot. The pipeline indexes YouTube video transcripts into a FAISS vector store and performs retrieval + generation to answer user questions grounded in the video's transcript.
 
 **Overview**
-- **Purpose:**: Provide accurate, context-grounded answers about YouTube videos using vector retrieval and a generative model.
-- **Core script:**: `rag_pipeline.py` — orchestrates embedding, indexing, and query-time retrieval + generation.
-- **Vector store:**: `vectorstore/index.faiss` — FAISS index storing vector embeddings for video transcripts.
+- **Purpose:** Provide concise, context-grounded answers about YouTube videos using retrieval + generative models.
+- **Main script:** `rag_pipeline.py` — creates/loads per-video FAISS indexes and runs interactive QA.
+- **Vector store location:** `vector_store/{video_id}` — each video's FAISS files are saved under `vector_store`.
 
-**Why this architecture?**
-- **Explainable**: Retrieval steps make it easy to trace which parts of the video content influenced an answer.
-- **Accurate**: The generative model is fed retrieved passages (context) to reduce hallucination.
-- **Efficient**: FAISS provides fast similarity search for large transcript collections.
+**Why this architecture**
+- **Explainable:** Retriever returns source passages so you can trace which transcript segments influenced an answer.
+- **Grounded:** The LLM receives retrieved context to reduce hallucinations.
+- **Fast:** FAISS provides efficient nearest-neighbour search over embeddings.
 
-**Features**
-- Build or load a FAISS vector index of video transcript embeddings.
-- Query the index to retrieve top-k passages relevant to a question.
-- Use a language model to generate a final answer grounded on retrieved context.
+**Key features**
+- Fetches video transcript via `youtube-transcript-api`.
+- Splits transcripts into chunks and embeds them with `sentence-transformers`.
+- Stores/reloads embeddings using FAISS (per-video directory under `vector_store`).
+- Interactive CLI: the script prompts for a YouTube URL and then accepts natural-language questions.
 
 **Placeholders**
 
-- [Video demo](https://drive.google.com/file/d/1y_v0Kgezjxj8aiY9OfcpulGqN89GDDYl/view?usp=sharing)
+- [Video demo](https://drive.google.com/file/d/1y_v0Kgezjxj8aiY9OfcpulGqN89GDDYl/view?usp=drive_link)
 
-**Getting Started**
+**Getting started**
 Prerequisites:
-- Python 3.8+ installed
-- A language model API key if required (e.g., OpenAI) — set as environment variable `OPENAI_API_KEY` or configure your provider in the code.
+- Python 3.8+
+- `HUGGINGFACEHUB_API_TOKEN` — required if using Hugging Face endpoints/models.
 
 Install dependencies:
 
@@ -34,40 +35,41 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Run the pipeline (basic usage):
+Run the pipeline (interactive):
 
 ```bash
 python rag_pipeline.py
 ```
 
-Notes:
-- If a `vectorstore/index.faiss` file exists, the pipeline may load it instead of rebuilding the index.
-- To rebuild the index from transcripts, modify the pipeline input section in `rag_pipeline.py` to point at your transcript source and run the script.
+Behavior notes:
+- The script prompts for a full YouTube URL. It extracts the `v=` parameter to build the `video_id`.
+- Per-video embeddings are saved in `vector_store/{video_id}`; if that directory exists the pipeline will load it instead of creating a new index.
 
 **How it works — high level**
-1. Extract or load transcript text for each video.
-2. Convert text passages into vector embeddings using an embedding model.
-3. Index embeddings in FAISS (`vectorstore/index.faiss`).
-4. At query time, embed the user question and retrieve nearest passages from FAISS.
-5. Provide retrieved passages as context to a language model to produce a grounded answer.
+1. Fetch transcript for the provided YouTube video using `youtube-transcript-api`.
+2. Split the transcript into chunks (via `langchain_text_splitters`).
+3. Convert chunks to embeddings (`sentence-transformers` / Hugging Face embeddings).
+4. Index embeddings with FAISS and save to `vector_store/{video_id}`.
+5. At query time, embed the question, retrieve relevant chunks, then pass context + question to the LLM for a grounded answer.
 
-This approach separates retrieval (factual grounding) from generation (answer composition) to improve reliability and traceability.
+**Configuration & environment variables**
+- `HUGGINGFACEHUB_API_TOKEN` — token for Hugging Face API endpoints (used by `HuggingFaceEndpoint`/embeddings).
+- `OPENAI_API_KEY` — only required if you change the LLM provider to OpenAI.
 
-**Configuration**
-- Inspect `requirements.txt` for Python package versions. Update or pin versions if needed.
-- Common environment variables (example):
+**Project structure**
+- `rag_pipeline.py` — main interactive pipeline.
+- `requirements.txt` — dependency list.
+- `vector_store/` — per-video FAISS data directories are stored here.
 
-```
-OPENAI_API_KEY=<your_api_key>
-```
-
-**Project Structure**
-- `rag_pipeline.py` — main pipeline runner for indexing and querying.
-- `requirements.txt` — Python dependencies.
-- `vectorstore/` — holds FAISS index files; `index.faiss` is the default index file.
+**Troubleshooting**
+- If transcripts fail to fetch, verify the video allows transcripts and network access.
+- If model calls fail, confirm `HUGGINGFACEHUB_API_TOKEN` is set and valid.
+- If FAISS load/save fails, check file permissions for `vector_store/`.
 
 **Contributing**
-- Add reproducible steps or tests when submitting changes.
-- Keep changes small and focused; include a short description of intent in PRs.
+- Open an issue or PR with clear reproduction steps.
+- Keep changes focused and document any configuration additions.
+
+
 
 
