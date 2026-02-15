@@ -66,22 +66,6 @@ Behavior notes:
 - If model calls fail, confirm `HUGGINGFACEHUB_API_TOKEN` is set and valid.
 - If FAISS load/save fails, check file permissions for `vector_store/`.
 
-**Streamlit web app**
-
-A minimal Streamlit UI is provided in `app.py` to load a video and ask questions from the browser.
-
-Run the app locally:
-
-```bash
-python -m venv .venv
-.
-.venv\Scripts\activate
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-The app lets you paste a YouTube URL or video id, initializes the pipeline (may fetch and index the transcript), and provides a question box to query the video.
-
 **Contributing**
 - Open an issue or PR with clear reproduction steps.
 - Keep changes focused and document any configuration additions.
